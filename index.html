@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Inspección de Coches</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #f0f4f8; color: #1a202c; }
+    .container { max-width: 680px; margin: 0 auto; padding: 20px 16px; }
+    header { background: linear-gradient(135deg, #1a365d 0%, #2b6cb0 100%); color: #fff; padding: 20px; }
+    header h1 { margin: 0; font-size: 22px; }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .card { background: #fff; border-radius: 16px; padding: 20px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+    button { font-size: 15px; padding: 12px 18px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600; }
+    .btn-primary { background: #2b6cb0; color: #fff; width: 100%; }
+    .btn-secondary { background: #edf2f7; color: #2d3748; }
+    .btn-del { background: #fed7d7; color: #c53030; padding: 8px 12px; font-size: 13px; }
+    .btn-row { display: flex; gap: 12px; margin-top: 20px; }
+    .status-row { display: flex; gap: 10px; margin: 16px 0; }
+    .status-btn { flex: 1; padding: 14px 8px; border-radius: 12px; border: 2px solid transparent; font-weight: 700; }
+    .status-btn.green { background: #c6f6d5; color: #276749; }
+    .status-btn.yellow { background: #feebc8; color: #c05621; }
+    .status-btn.red { background: #fed7d7; color: #c53030; }
+    .status-btn.active { border-color: #1a202c; }
+    input, textarea, select { width: 100%; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 15px; margin-top: 6px; }
+    textarea { min-height: 90px; }
+    .photo-preview { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+    .photo-preview img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; cursor: pointer; }
+    .summary-item { border-bottom: 1px solid #edf2f7; padding: 12px 0; }
+    .progress { font-size: 13px; color: #718096; }
+    .fab { position: fixed; bottom: 24px; right: 24px; width: 64px; height: 64px; border-radius: 50%; background: #2b6cb0; color: #fff; font-size: 32px; border: none; box-shadow: 0 4px 16px rgba(43,108,176,0.4); cursor: pointer; }
+    .insp-item { background: #fff; border-radius: 14px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+    .modal { position: fixed; inset: 0; background: rgba(0,0,0,0.95); display: none; align-items: center; justify-content: center; z-index: 9999; }
+    .modal img { max-width: 96%; max-height: 92%; }
+    label { font-size: 14px; font-weight: 500; color: #4a5568; }
+  </style>
+</head>
+<body>
+  <header><div class="container"><h1>Inspección de Coches</h1></div></header>
+  <div class="container">
+    <div id="dashboard" class="screen active">
+      <h2 style="margin-top:0;">Mis inspecciones</h2>
+      <div id="inspList"></div>
+    </div>
+    <div id="home" class="screen">
+      <div class="card">
+        <h2>Nueva inspección</h2>
+        <label>Tipo de vehículo</label>
+        <select id="vehicleType">
+          <option value="gasoline">Gasolina</option>
+          <option value="diesel">Diésel</option>
+          <option value="hybrid">Híbrido</option>
+          <option value="phev">Híbrido enchufable</option>
+          <option value="electric">Eléctrico</option>
+        </select>
+        <label style="margin-top:12px; display:block;">Marca</label>
+        <input id="marca" placeholder="Ej: Volkswagen" />
+        <label style="margin-top:12px; display:block;">Modelo</label>
+        <input id="modelo" placeholder="Ej: Golf" />
+        <label style="margin-top:12px; display:block;">Año</label>
+        <input id="anio" type="number" placeholder="2018" />
+        <label style="margin-top:12px; display:block;">Kilometraje</label>
+        <input id="km" type="number" placeholder="125000" />
+        <button class="btn-primary" style="margin-top:16px;" onclick="startInspection()">Empezar</button>
+        <button class="btn-secondary" style="margin-top:8px; width:100%;" onclick="goDashboard()">Volver</button>
+      </div>
+    </div>
+    <div id="checklist" class="screen">
+      <div class="card">
+        <div class="progress" id="progress"></div>
+        <h2 id="itemTitle" style="margin:8px 0;"></h2>
+        <div class="status-row">
+          <button class="status-btn green" id="btnGreen" onclick="setStatus('green')">Verde</button>
+          <button class="status-btn yellow" id="btnYellow" onclick="setStatus('yellow')">Amarillo</button>
+          <button class="status-btn red" id="btnRed" onclick="setStatus('red')">Rojo</button>
+        </div>
+        <label>Nota</label>
+        <textarea id="note" placeholder="Nota de este punto..."></textarea>
+        <button class="btn-secondary" style="width:100%; margin-top:8px;" onclick="openCamera()">Hacer foto</button>
+        <input type="file" id="photoInput" accept="image/*" capture="environment" onchange="addPhotos(event)" style="display:none;" />
+        <div class="photo-preview" id="photoPreview"></div>
+        <div class="btn-row">
+          <button class="btn-secondary" style="flex:1;" onclick="prevItem()">Anterior</button>
+          <button class="btn-primary" style="flex:1.5;" id="nextBtn" onclick="nextItem()">Siguiente</button>
+        </div>
+      </div>
+    </div>
+    <div id="summary" class="screen">
+      <div class="card">
+        <h2>Resumen</h2>
+        <div id="summaryContent"></div>
+        <button class="btn-primary" style="margin-top:16px;" onclick="generatePDF()">Generar PDF</button>
+        <button class="btn-secondary" style="margin-top:8px; width:100%;" onclick="goDashboard()">Volver al panel</button>
+      </div>
+    </div>
+  </div>
+  <button class="fab" onclick="newInspection()">+</button>
+  <div id="modal" class="modal" onclick="closeModal()"><img id="modalImg" /></div>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script>
+    var CHECKLIST = {
+      common: [
+        { id: 'marca', label: 'Marca, modelo, año y versión' },
+        { id: 'km', label: 'Kilómetros' },
+        { id: 'vin', label: 'VIN (comprobar coincidencia en varios sitios)' },
+        { id: 'matricula', label: 'Matrícula' },
+        { id: 'origen', label: 'País de origen / historial conocido' },
+        { id: 'cambio', label: 'Tipo de cambio (manual / automático / CVT)' },
+        { id: 'color', label: 'Color' },
+        { id: 'propietarios', label: 'Número de propietarios (si se conoce)' },
+        { id: 'pintura_general', label: 'Estado general de la pintura' },
+        { id: 'uniformidad', label: 'Uniformidad de color y textura entre paneles' },
+        { id: 'gaps', label: 'Gaps entre puertas, capó, maletero y aletas' },
+        { id: 'golpes', label: 'Golpes, abolladuras y reparaciones visibles' },
+        { id: 'masilla', label: 'Evidencias de masilla o repintado' },
+        { id: 'tornillos_pintura', label: 'Tornillos con pintura (posible repintado)' },
+        { id: 'parachoques', label: 'Parachoques delantero y trasero' },
+        { id: 'parachoques_circulos', label: 'Parachoques trasero: círculos (ahí no se mide la pintura)' },
+        { id: 'capo', label: 'Capó (alineación y estado)' },
+        { id: 'maletero_ext', label: 'Maletero / portón' },
+        { id: 'cristales', label: 'Cristales (grietas, chips, marcas)' },
+        { id: 'faros', label: 'Faros delanteros' },
+        { id: 'pilotos', label: 'Pilotos traseros' },
+        { id: 'espejos', label: 'Espejos y manillas' },
+        { id: 'bisagras', label: 'Bisagras (puertas, capó, maletero)' },
+        { id: 'pintura_estrella', label: 'Medición de pintura en cruz (capó, techo, maletero, aletas y puertas)' },
+        { id: 'pintura_dentro', label: 'Medir pintura por dentro (vanos, marcos de puertas, capó y maletero)' },
+        { id: 'pintura_uniformidad', label: 'Uniformidad de color entre paneles' },
+        { id: 'pintura_repintado', label: 'Evidencias de repintado / masilla / tornillos pintados' },
+        { id: 'oxidos_general', label: 'Óxidos (fotos y descripción por zona)' },
+        { id: 'oxidos_pasos', label: 'Pasos de rueda' },
+        { id: 'oxidos_umbrales', label: 'Umbrales y parte baja de puertas' },
+        { id: 'oxidos_bastidor', label: 'Bastidor y largueros' },
+        { id: 'inf_pasos', label: 'Pasos de rueda delanteros y traseros' },
+        { id: 'inf_umbrales', label: 'Umbrales de puertas' },
+        { id: 'inf_puertas', label: 'Parte baja de las puertas' },
+        { id: 'inf_bastidor', label: 'Bastidor' },
+        { id: 'inf_maletero', label: 'Suelo del maletero y hueco rueda de repuesto' },
+        { id: 'inf_bajo', label: 'Parte baja del coche' },
+        { id: 'inf_escape', label: 'Escape / sistema de escape' },
+        { id: 'inf_suspension', label: 'Suspensión visible' },
+        { id: 'inf_fugas', label: 'Fugas de líquidos' },
+        { id: 'asientos', label: 'Asientos (desgaste, roturas, funcionamiento)' },
+        { id: 'tapiceria', label: 'Tapicería' },
+        { id: 'volante', label: 'Volante y palanca de cambios' },
+        { id: 'alfombrillas', label: 'Alfombrillas y moqueta' },
+        { id: 'gomas', label: 'Gomas de interior (si salen fácil, algo han tocado; si cuesta, no las han tocado)' },
+        { id: 'maletero_int', label: 'Maletero' },
+        { id: 'cubierta_maletero', label: 'Cubierta / bandeja del maletero (si la tiene)' },
+        { id: 'cinturones', label: 'Cinturones de seguridad' },
+        { id: 'airbags', label: 'Airbags (luz de testigo)' },
+        { id: 'olores', label: 'Olores' },
+        { id: 'aire', label: 'Aire acondicionado' },
+        { id: 'calefaccion', label: 'Calefacción' },
+        { id: 'botones', label: 'Todos los botones' },
+        { id: 'luces_ext', label: 'Todas las luces exteriores' },
+        { id: 'luces_int', label: 'Luces interiores' },
+        { id: 'elevalunas', label: 'Elevalunas, cierre centralizado, retrovisores' },
+        { id: 'multimedia', label: 'Pantalla multimedia / radio' },
+        { id: 'sensores', label: 'Sensores de aparcamiento y cámaras' },
+        { id: 'crucero', label: 'Control de crucero y asistencias' },
+        { id: 'testigos', label: 'Testigos del cuadro al arrancar' },
+        { id: 'modernos', label: 'Si es moderno: servicios, nivel de aceite y presión de neumáticos (sensores)' },
+        { id: 'dibujo', label: 'Profundidad de dibujo (4 + repuesto)' },
+        { id: 'desgaste', label: 'Desgaste uniforme' },
+        { id: 'fecha_neumaticos', label: 'Fecha de los neumáticos (DOT)' },
+        { id: '4x4', label: 'Si es 4x4: las 4 ruedas iguales (marca, medida y desgaste)' },
+        { id: 'fecha_llantas', label: 'Fecha de las llantas' },
+        { id: 'llantas', label: 'Estado de las llantas' },
+        { id: 'pastillas', label: 'Pastillas' },
+        { id: 'discos', label: 'Discos' },
+        { id: 'freno_mano', label: 'Freno de mano' },
+        { id: 'arranque', label: 'Arranque y ralentí' },
+        { id: 'aceleracion', label: 'Aceleración y respuesta' },
+        { id: 'cambios', label: 'Cambio de marchas' },
+        { id: 'direccion', label: 'Dirección' },
+        { id: 'frenos_prueba', label: 'Frenos' },
+        { id: 'suspension_prueba', label: 'Suspensión y ruidos' },
+        { id: 'comportamiento', label: 'Comportamiento general' },
+        { id: 'vin_doc', label: 'Coincidencia del VIN' },
+        { id: 'mantenimiento', label: 'Libro de mantenimiento / facturas' },
+        { id: 'historial', label: 'Historial disponible' },
+        { id: 'observaciones', label: 'Observaciones del inspector' },
+        { id: 'recomendacion', label: 'Recomendación final' },
+      ],
+      gasoline: [
+        { id: 'arranque_frio', label: 'Arranque en frío y humo' },
+        { id: 'aceite', label: 'Nivel y estado del aceite' },
+        { id: 'refrigerante', label: 'Nivel y estado del refrigerante' },
+        { id: 'frenos_liq', label: 'Nivel de líquido de frenos' },
+        { id: 'distribucion', label: 'Correa / cadena de distribución' },
+        { id: 'fugas_motor', label: 'Manguitos, abrazaderas y fugas' },
+        { id: 'bateria_12v', label: 'Batería 12V' },
+        { id: 'tapones', label: 'Tapones: aceite, anticongelante, dirección (si no es eléctrica), parabrisas y frenos' },
+        { id: 'silent', label: 'Enganches tapa motor y silent block' },
+        { id: 'diagnosis', label: 'Diagnosis: fallos y kilometraje' },
+        { id: 'inyectores', label: 'Corrección de inyectores (suma = 0)' },
+      ],
+      diesel: [
+        { id: 'dpf', label: 'Estado del DPF / aditivos' },
+        { id: 'saturacion_dpf', label: 'Límite de saturación del filtro de partículas (diagnosis)' },
+        { id: 'humo_negro', label: 'Humo negro al acelerar' },
+        { id: 'adblue', label: 'AdBlue sin máquina: mano dentro del escape, debe salir limpia y un poco húmeda' },
+        { id: 'cenizas', label: 'Masa de cenizas del DPF (aprox. 10 g = 30.000 km, 60 g ≈ 180.000 km)' },
+      ],
+      hybrid: [
+        { id: 'soh_hibrido', label: 'Estado de salud batería de tracción (SoH)' },
+        { id: 'modo_electrico', label: 'Funcionamiento modo eléctrico' },
+        { id: 'transicion', label: 'Transición motor gasolina ↔ eléctrico' },
+        { id: 'regen', label: 'Frenado regenerativo' },
+      ],
+      phev: [
+        { id: 'puerto_carga_h', label: 'Puerto de carga y cable' },
+        { id: 'prueba_carga_h', label: 'Prueba de carga (si es posible)' },
+      ],
+      electric: [
+        { id: 'soh_ev', label: 'Estado de salud de la batería (SoH)' },
+        { id: 'autonomia', label: 'Autonomía estimada vs original' },
+        { id: 'puerto_carga', label: 'Puerto de carga' },
+        { id: 'cable_carga', label: 'Cable de carga' },
+        { id: 'prueba_carga', label: 'Prueba de carga' },
+        { id: 'motor_ev', label: 'Motor eléctrico' },
+        { id: 'bateria_12v_ev', label: 'Batería 12V' },
+        { id: 'maletero_bateria', label: 'Maletero: batería, cableado, soldaduras y si la batería es original' },
+      ],
+    };
+
+    var items = [];
+    var current = 0;
+    var data = { results: {}, notes: {}, photos: {} };
+    var vehicle = {};
+    var inspections = [];
+
+    try { inspections = JSON.parse(localStorage.getItem('inspections') || '[]'); } catch(e) {}
+
+    function showScreen(id) {
+      var screens = document.querySelectorAll('.screen');
+      for (var i = 0; i < screens.length; i++) screens[i].classList.remove('active');
+      document.getElementById(id).classList.add('active');
+    }
+
+    function renderDashboard() {
+      var list = document.getElementById('inspList');
+      list.innerHTML = '';
+      if (inspections.length === 0) {
+        list.innerHTML = '<p style="color:#718096;">No hay inspecciones todavía.</p>';
+        return;
+      }
+      for (var i = 0; i < inspections.length; i++) {
+        (function(idx) {
+          var insp = inspections[idx];
+          var div = document.createElement('div');
+          div.className = 'insp-item';
+          var info = document.createElement('div');
+          info.style.cursor = 'pointer';
+          info.innerHTML = '<b>' + (insp.vehicle.marca || 'Sin marca') + ' ' + (insp.vehicle.modelo || '') + '</b><br><span style="font-size:13px;color:#718096;">' + (insp.date || '') + '</span>';
+          info.onclick = function() { openInspection(idx); };
+          var btn = document.createElement('button');
+          btn.className = 'btn-del';
+          btn.textContent = 'Eliminar';
+          btn.onclick = function(e) {
+            e.stopPropagation();
+            if (confirm('¿Eliminar esta inspección?')) {
+              inspections.splice(idx, 1);
+              localStorage.setItem('inspections', JSON.stringify(inspections));
+              renderDashboard();
+            }
+          };
+          div.appendChild(info);
+          div.appendChild(btn);
+          list.appendChild(div);
+        })(i);
+      }
+    }
+
+    function newInspection() {
+      items = []; current = 0; data = { results: {}, notes: {}, photos: {} }; vehicle = {};
+      document.getElementById('marca').value = '';
+      document.getElementById('modelo').value = '';
+      document.getElementById('anio').value = '';
+      document.getElementById('km').value = '';
+      showScreen('home');
+    }
+
+    function openInspection(idx) {
+      var insp = inspections[idx];
+      vehicle = insp.vehicle; data = insp.data; items = insp.items;
+      showSummary();
+    }
+
+    function saveInspection() {
+      var record = {
+        id: Date.now(),
+        date: new Date().toLocaleDateString('es-ES'),
+        vehicle: vehicle,
+        data: data,
+        items: items
+      };
+      inspections.unshift(record);
+      try {
+        localStorage.setItem('inspections', JSON.stringify(inspections));
+      } catch (e) {
+        inspections[0] = {
+          id: record.id,
+          date: record.date,
+          vehicle: record.vehicle,
+          items: record.items,
+          data: { results: data.results || {}, notes: data.notes || {}, photos: {} }
+        };
+        try { localStorage.setItem('inspections', JSON.stringify(inspections)); } catch (e2) {
+          inspections.shift();
+        }
+      }
+    }
+
+    function startInspection() {
+      vehicle = { type: document.getElementById('vehicleType').value, marca: document.getElementById('marca').value, modelo: document.getElementById('modelo').value, anio: document.getElementById('anio').value, km: document.getElementById('km').value };
+      items = CHECKLIST.common.slice();
+      if (vehicle.type === 'gasoline') items = items.concat(CHECKLIST.gasoline);
+      if (vehicle.type === 'diesel') items = items.concat(CHECKLIST.gasoline, CHECKLIST.diesel);
+      if (vehicle.type === 'hybrid') items = items.concat(CHECKLIST.gasoline, CHECKLIST.hybrid);
+      if (vehicle.type === 'phev') items = items.concat(CHECKLIST.gasoline, CHECKLIST.hybrid, CHECKLIST.phev);
+      if (vehicle.type === 'electric') items = items.concat(CHECKLIST.electric);
+      current = 0;
+      showScreen('checklist');
+      renderItem();
+    }
+
+    function openCamera() { document.getElementById('photoInput').click(); }
+
+    function addPhotos(e) {
+      var files = e.target.files;
+      if (!files || !files.length) return;
+      if (!data.photos) data.photos = {};
+      var id = items[current].id;
+      if (!data.photos[id]) data.photos[id] = [];
+      for (var i = 0; i < files.length; i++) {
+        (function(file) {
+          var reader = new FileReader();
+          reader.onload = function() {
+            var img = new Image();
+            img.onload = function() {
+              var max = 900;
+              var w = img.width, h = img.height;
+              if (w > max || h > max) {
+                var r = Math.min(max / w, max / h);
+                w = Math.round(w * r);
+                h = Math.round(h * r);
+              }
+              var c = document.createElement('canvas');
+              c.width = w;
+              c.height = h;
+              c.getContext('2d').drawImage(img, 0, 0, w, h);
+              data.photos[id].push(c.toDataURL('image/jpeg', 0.62));
+              renderItem();
+            };
+            img.src = reader.result;
+          };
+          reader.readAsDataURL(file);
+        })(files[i]);
+      }
+      e.target.value = '';
+    }
+
+    function renderItem() {
+      var item = items[current];
+      document.getElementById('progress').textContent = 'Punto ' + (current + 1) + ' de ' + items.length;
+      document.getElementById('itemTitle').textContent = item.label;
+      document.getElementById('note').value = data.notes[item.id] || '';
+      var status = data.results[item.id] || '';
+      document.getElementById('btnGreen').classList.toggle('active', status === 'green');
+      document.getElementById('btnYellow').classList.toggle('active', status === 'yellow');
+      document.getElementById('btnRed').classList.toggle('active', status === 'red');
+      var preview = document.getElementById('photoPreview');
+      preview.innerHTML = '';
+      var photos = data.photos[item.id] || [];
+      for (var i = 0; i < photos.length; i++) {
+        var img = document.createElement('img');
+        img.src = photos[i];
+        img.onclick = function() { openModal(this.src); };
+        preview.appendChild(img);
+      }
+      document.getElementById('nextBtn').textContent = current === items.length - 1 ? 'Finalizar' : 'Siguiente';
+    }
+
+    function setStatus(s) {
+      data.notes[items[current].id] = document.getElementById('note').value;
+      data.results[items[current].id] = s;
+      renderItem();
+    }
+
+    function nextItem() {
+      if (!items.length || !items[current]) return;
+      if (!data.notes) data.notes = {};
+      if (!data.results) data.results = {};
+      if (!data.photos) data.photos = {};
+      data.notes[items[current].id] = document.getElementById('note').value || '';
+      if (current < items.length - 1) {
+        current++;
+        renderItem();
+      } else {
+        try { saveInspection(); } catch (e) {}
+        showSummary();
+      }
+    }
+
+    function prevItem() {
+      data.notes[items[current].id] = document.getElementById('note').value;
+      if (current > 0) { current--; renderItem(); }
+      else showScreen('home');
+    }
+
+    function showSummary() {
+      if (!data.notes) data.notes = {};
+      if (!data.results) data.results = {};
+      if (!data.photos) data.photos = {};
+      showScreen('summary');
+      var el = document.getElementById('summaryContent');
+      var counts = { green: 0, yellow: 0, red: 0, none: 0 };
+      for (var i = 0; i < items.length; i++) counts[data.results[items[i].id] || 'none']++;
+      var html = '<p><b>' + (vehicle.marca || '') + ' ' + (vehicle.modelo || '') + '</b></p>';
+      html += '<p style="margin:10px 0;"><span style="color:#38a169;font-weight:700;">Verde: ' + counts.green + '</span> &nbsp; ';
+      html += '<span style="color:#d69e2e;font-weight:700;">Amarillo: ' + counts.yellow + '</span> &nbsp; ';
+      html += '<span style="color:#e53e3e;font-weight:700;">Rojo: ' + counts.red + '</span> &nbsp; ';
+      html += '<span style="color:#718096;">Sin marcar: ' + counts.none + '</span></p>';
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        var s = data.results[item.id] || 'none';
+        var label = s === 'green' ? 'Verde' : s === 'yellow' ? 'Amarillo' : s === 'red' ? 'Rojo' : 'Sin marcar';
+        var color = s === 'green' ? '#38a169' : s === 'yellow' ? '#d69e2e' : s === 'red' ? '#e53e3e' : '#718096';
+        var note = data.notes[item.id] || '';
+        var photos = data.photos[item.id] || [];
+        html += '<div class="summary-item"><div>' + item.label + '</div><div style="color:' + color + ';font-weight:700;">' + label + '</div>';
+        if (note) html += '<div style="font-size:13px;color:#555;margin-top:4px;">' + note + '</div>';
+        if (photos.length) {
+          html += '<div class="photo-preview">';
+          for (var j = 0; j < photos.length; j++) html += '<img src="' + photos[j] + '" onclick="openModal(this.src)" />';
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+      el.innerHTML = html;
+    }
+
+    function generatePDF() {
+      if (!window.jspdf) { alert('PDF no disponible'); return; }
+      var doc = new window.jspdf.jsPDF();
+      var y = 18;
+      doc.setFillColor(26, 54, 93);
+      doc.rect(0, 0, 210, 28, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(18);
+      doc.text('Informe de Inspección', 14, 18);
+      y = 38;
+      doc.setTextColor(0, 0, 0);
+      doc.setFontSize(14);
+      doc.text((vehicle.marca || '') + ' ' + (vehicle.modelo || ''), 14, y);
+      y += 10;
+      var counts = { green: 0, yellow: 0, red: 0, none: 0 };
+      for (var i = 0; i < items.length; i++) counts[data.results[items[i].id] || 'none']++;
+      doc.setFontSize(10);
+      doc.setTextColor(56, 161, 105); doc.text('Verde: ' + counts.green, 14, y);
+      doc.setTextColor(214, 158, 46); doc.text('Amarillo: ' + counts.yellow, 55, y);
+      doc.setTextColor(229, 62, 62); doc.text('Rojo: ' + counts.red, 105, y);
+      doc.setTextColor(113, 128, 150); doc.text('Sin marcar: ' + counts.none, 145, y);
+      y += 12;
+      doc.setDrawColor(226, 232, 240); doc.line(14, y, 196, y); y += 8;
+      for (var i = 0; i < items.length; i++) {
+        if (y > 270) { doc.addPage(); y = 20; }
+        var item = items[i];
+        var s = data.results[item.id] || 'none';
+        var label = s === 'green' ? 'Verde' : s === 'yellow' ? 'Amarillo' : s === 'red' ? 'Rojo' : 'Sin marcar';
+        var color = s === 'green' ? [56, 161, 105] : s === 'yellow' ? [214, 158, 46] : s === 'red' ? [229, 62, 62] : [113, 128, 150];
+        doc.setFontSize(10); doc.setTextColor(45, 55, 72); doc.text(item.label, 14, y);
+        doc.setTextColor(color[0], color[1], color[2]); doc.text(label, 160, y);
+        y += 5;
+        var note = data.notes[item.id];
+        if (note) { doc.setFontSize(9); doc.setTextColor(113, 128, 150); var lines = doc.splitTextToSize(note, 170); doc.text(lines, 14, y); y += lines.length * 4; }
+        var photos = data.photos[item.id] || [];
+        for (var p = 0; p < photos.length; p++) {
+          if (y > 200) { doc.addPage(); y = 20; }
+          try { doc.addImage(photos[p], 'JPEG', 14, y, 70, 52); y += 56; } catch(e) { try { doc.addImage(photos[p], 'PNG', 14, y, 70, 52); y += 56; } catch(e2) {} }
+        }
+        y += 4;
+      }
+      doc.save('informe.pdf');
+    }
+
+    function goDashboard() { renderDashboard(); showScreen('dashboard'); }
+    function openModal(src) { document.getElementById('modalImg').src = src; document.getElementById('modal').style.display = 'flex'; }
+    function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+    document.getElementById('note').oninput = function(e) { if (items[current]) data.notes[items[current].id] = e.target.value; };
+    renderDashboard();
+  </script>
+</body>
+</html>
